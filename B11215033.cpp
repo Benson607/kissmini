@@ -36,19 +36,21 @@ public:
     int output_size;
     int node_size;
     int status_size;
-    char start_status;
+    string start_status;
     vector<vector<Box>> table;
     vector<vector<string>> node_list;
     vector<string> status_list;
     vector<vector<string>> form;
     vector<string> input_list;
+    vector<int> del_list;
+    vector<vector<string>> output_kiss_node_list;
     Kiss() {
         start = 0;
         input_digit = 0;
         output_size = 0;
         node_size = 0;
         status_size = 0;
-        start_status = 0;
+        start_status = "";
     }
     void add_status(string status) {
         for (int i = 0; i < status_list.size(); i++) {
@@ -116,7 +118,29 @@ public:
             }
         }
     }
-    void replace(int old, int next) {}
+    int add_del(int del_int) {
+        for (int i: del_list) {
+            if (i == del_int) {
+                return 1;
+            }
+        }
+        del_list.push_back(del_int);
+        return 0;
+    }
+    void replace(int old, int next) {
+        if (add_del(old)) {
+            return;
+        }
+        string next_str = to_string(next);
+        string old_str = to_string(old);
+        for (int i = 0; i < form.size(); i++) {
+            for (int j = 1; j < form[0].size(); j += 2) {
+                if (form[i][j] == old_str) {
+                    form[i][j] = next_str;
+                }
+            }
+        }
+    }
     void easy() {
         int keep = 1;
         while (keep) {
@@ -149,6 +173,95 @@ public:
                 }
             }
         }
+    }
+    void del() {
+        for (int i = 0; i < del_list.size(); i++) {
+            int min = i;
+            for (int j = i + 1; j < del_list.size(); j++) {
+                if (del_list[min] > del_list[j]) {
+                    min = j;
+                }
+            }
+            int tmp = del_list[i];
+            del_list[i] = del_list[min];
+            del_list[min] = tmp;
+        }
+        for (int i = 0; i < del_list.size(); i++) {
+            form.erase(form.begin() + del_list[i] - i);
+        }
+    }
+    void write_kiss(string path) {
+        ofstream output;
+        output.open(path);
+        
+        output << ".start_kiss" << endl;
+        output << ".i " << input_digit << endl;
+        output << ".o " << output_size << endl;
+        output << ".p " << input_list.size() * form.size() << endl;
+        output << ".s " << form.size() << endl;
+        output << ".r " << start_status << endl;
+
+        for (int i = 0; i < form.size(); i++) {
+            for (int j = 0; j < input_list.size(); j++) {
+                vector<string> one_node;
+                one_node.push_back(input_list[j]);
+                one_node.push_back(form[i][0]);
+                one_node.push_back(status_list[atoi(form[i][j * 2 + 1].c_str())]);
+                one_node.push_back(form[i][j * 2 + 2]);
+                output_kiss_node_list.push_back(one_node);
+                output << one_node[0] << " " << one_node[1] << " " << one_node[2] << " " << one_node[3] << endl;
+            }
+        }
+
+        output << ".end_kiss" << endl;
+        
+        output.close();
+    }
+    void write_dot(string path) {
+        ofstream output;
+        output.open(path);
+
+        output << "digraph STG {" << endl;
+        output << "    rankdir=LR;" << endl << endl;
+        output << "    INIT [shape=point]" << endl;
+
+        for (int i = 0; i < form.size(); i++) {
+            output << "    " << form[i][0] << " [label=\"" << form[i][0] << "\"]" << endl;
+        }
+        output << endl;
+
+        output << "    INIT -> " << start_status << ";" << endl;
+
+        for (int i = 0; i < output_kiss_node_list.size(); i++) {
+            vector<string> labels;
+            labels.push_back(output_kiss_node_list[i][0]);
+            labels[labels.size() - 1].append("/");
+            labels[labels.size() - 1].append(output_kiss_node_list[i][3]);
+            vector<int> output_del_list;
+            for (int j = i + 1; j < output_kiss_node_list.size(); j++) {
+                if (output_kiss_node_list[i][1] == output_kiss_node_list[j][1] && output_kiss_node_list[i][2] == output_kiss_node_list[j][2]) {
+                    labels.push_back(output_kiss_node_list[j][0]);
+                    labels[labels.size() - 1].append("/");
+                    labels[labels.size() - 1].append(output_kiss_node_list[j][3]);
+                    output_del_list.push_back(j);
+                }
+            }
+            for (int j = 0; j < output_del_list.size(); j++) {
+                output_kiss_node_list.erase(output_kiss_node_list.begin() + output_del_list[j] - j);
+            }
+            string labels_str = "";
+            for (int j = 0; j < labels.size(); j++) {
+                labels_str.append(labels[j]);
+                if (j != labels.size() - 1) {
+                    labels_str.append(",");
+                }
+            }
+            output << "    " << output_kiss_node_list[i][1] << " -> " << output_kiss_node_list[i][2] << " [label=\"" << labels_str << "\"];" << endl;
+        }
+
+        output << "}" << endl;
+
+        output.close();
     }
 };
 
@@ -188,7 +301,7 @@ int main(int argc, char* argv[]) {
             kiss.status_size = num;
         }
         else if (order == ".r") {
-            char start_status;
+            string start_status;
             linestream >> start_status;
             kiss.start_status = start_status;
         }
@@ -204,66 +317,24 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    for (int i = 0; i < kiss.node_size; i++) {
-        for (int j = 0; j < 4; j++) {
-            cout << kiss.node_list[i][j] << " ";
-        }
-        cout << endl;
-    }
-
-    cout << endl;
-
-    for (string i: kiss.status_list) {
-        cout << i << " ";
-    }
-    cout << endl;
-
-    cout << endl;
+    input.close();
 
     kiss.transfer_form();
+    kiss.transfer_table();
+    kiss.easy();
+    kiss.del();
 
     for (int i = 0; i < kiss.form.size(); i++) {
-        for (string j: kiss.form[i]) {
-            cout << j << " ";
+        for (int j = 0; j < kiss.form[0].size(); j++) {
+            cout << kiss.form[i][j] << " ";
         }
         cout << endl;
     }
 
     cout << endl;
 
-    kiss.transfer_table();
-
-    for (int i = 0; i < kiss.table.size(); i++) {
-        for (int j = 0; j < kiss.table[i].size(); j++) {
-            if (kiss.table[i][j].x) {
-                cout << "x" << "\t";
-            }
-            else {
-                for (int k = 0; k < kiss.table[i][j].status.size(); k++) {
-                    cout << kiss.table[i][j].status[k][0] << " " << kiss.table[i][j].status[k][1] << " ";
-                }
-            }
-        }
-        cout << "\t" << endl;
-    }
-
-    cout << endl;
-
-    kiss.easy();
-
-    for (int i = 0; i < kiss.table.size(); i++) {
-        for (int j = 0; j < kiss.table[i].size(); j++) {
-            if (kiss.table[i][j].x) {
-                cout << "x" << "\t";
-            }
-            else {
-                for (int k = 0; k < kiss.table[i][j].status.size(); k++) {
-                    cout << kiss.table[i][j].status[k][0] << " " << kiss.table[i][j].status[k][1] << " ";
-                }
-            }
-        }
-        cout << "\t" << endl;
-    }
+    kiss.write_kiss(argv[2]);
+    kiss.write_dot(argv[3]);
     
     return 0;
 }
